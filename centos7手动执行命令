@@ -1,0 +1,346 @@
+#!/bin/bash
+
+cat /etc/redhat-release
+
+
+/bin/cat /etc/shadow | /bin/awk -F: '($2 == "" ) { print "user " $1 " does not have a password "}'
+
+awk -F: '($3 == 0) {print}' /etc/passwd
+
+#cp /etc/pam.d/system-auth /etc/pam.d/system-auth.bak
+
+#66666666666666666666666666666666666666666666666
+#centos6 
+echo '配置密码复杂度'
+cp /etc/pam.d/password-auth{,.bak}
+cp /etc/pam.d/system-auth{,.bak}
+echo 'centos 666666'
+sed -i 's/password    requisite     pam_cracklib.so try_first_pass retry=3/password    requisite     pam_cracklib.so minlen=8 dcredit=-1 ucredit=-1 ocredit=-1 lcredit=-1 minclass=4 retry=3/g' /etc/pam.d/system-auth
+#不重复使用最近使用过的密码
+sudo sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/password-auth
+sudo sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/system-auth
+
+#7777777777777777777777777777777777777777777777777
+#cp /etc/pam.d/password-auth{,.bak}
+#cp /etc/pam.d/system-auth{,.bak}
+#cp /etc/pam.d/sshd{,.bak}
+
+cp /etc/security/pwquality.conf{,.bak}
+cat >> /etc/security/pwquality.conf << EOF
+remember = 5
+deny = 5
+difok = 5
+minlen = 9
+lcredit = -1 
+ucredit = -1 
+dcredit = -1 
+ocredit = -1  
+unlock_time = 900
+EOF
+cat  /etc/security/pwquality.conf
+
+#sed -i 's/password    requisite     pam_pwquality.so try_first_pass local_users_only retry=3 authtok_type=/password    requisite     pam_pwquality.so try_first_pass local_users_only authtok_type= retry=3 minlen=8 lcredit=-1 ucredit=-1 dcredit=-1 ocredit=-1  difok=5/g'  /etc/pam.d/system-auth
+#sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/password-auth
+#sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/system-auth
+#sed -i '2iauth       required     pam_tally2.so deny=8 unlock_time=900' /etc/pam.d/sshd
+
+
+#=========================
+#检查wheel组的用户，app_999加入到wheel组
+
+getent group wheel
+usermod -G wheel app_999
+getent group wheel
+
+
+
+#getent group wheel | grep "app_999"
+#if [ $? == 0 ]; then
+#    echo "alread"
+#else
+    # 添加 app_999 用户到 wheel 组
+#    usermod -G wheel app_999
+#    echo "app_999 add"
+#fi
+
+cp /etc/pam.d/su{,.bak}
+cat /etc/pam.d/su
+if grep -q "group=wheel" /etc/pam.d/su; then
+    echo 'youle '
+else
+    sed -i 's/#auth\s\+required\s\+pam_wheel\.so\s\+use_uid/auth\t\trequired\tpam_wheel.so group=wheel/'  /etc/pam.d/su
+    echo 'yi tianjia'
+fi
+echo '======================='
+cat /etc/pam.d/su
+
+#================== vsftp配置
+
+systemctl status vsftpd
+
+#禁止 root 用户登录 FTP
+if grep -q "^root$" /etc/vsftpd/ftpusers; then
+	echo 'root alread no'
+else
+	echo "root" >> /etc/vsftpd/ftpusers 
+	echo 'root alread add'
+fi
+
+
+# 检查是否安装了 vsftpd
+if ! command -v vsftpd &> /dev/null; then
+    echo "vsftpd 未安装"
+    exit 1
+else
+    echo "vsftpd 已安装，请配置限制条件"
+    if grep -q "^anon_umask=022$" /etc/vsftpd/vsftpd.conf && grep -q "^local_umask=022$" /etc/vsftpd/vsftpd.conf; then
+    echo "已经存在 anon_umask=022 和 local_umask=022 两行"
+    grep -E '^(anon|local)_umask=022$' /etc/vsftpd/vsftpd.conf | grep -v '#'
+		else
+		    { grep -q "^anon_umask=022$" /etc/vsftpd/vsftpd.conf || echo "anon_umask=022"; grep -q "^local_umask=022$" /etc/vsftpd/vsftpd.conf || echo "local_umask=022"; } | sudo tee -a /etc/vsftpd/vsftpd.conf >/dev/null
+		    echo "已添加缺失的行到 /etc/vsftpd/vsftpd.conf"
+		    grep -E '^(anon|local)_umask=022$' /etc/vsftpd/vsftpd.conf | grep -v '#'
+				# 重启 vsftpd 服务
+				systemctl restart vsftpd
+				if [ $? -eq 0 ]; then
+					    echo "vsftpd 服务已成功重启"
+					else
+					    echo "重启 vsftpd 服务时出现错误请检查"
+				fi
+		fi
+fi
+
+
+
+
+#==========================
+#限制控制配置文件访问权限
+chmod 644 /etc/passwd
+chmod 400 /etc/shadow
+chmod 644 /etc/group
+chmod 600 /var/log/messages
+chmod 644 /var/log/dmesg
+chmod 600 /var/log/maillog
+chmod 600 /var/log/secure 
+chmod 664 /var/log/wtmp
+chmod 600 /var/log/cron
+
+
+
+#===============SSH
+cp /etc/ssh/sshd_config{,.bak}
+# 取消 LogLevel INFO 参数的注释
+sed  -i '/^#LogLevel INFO/s/^#//' /etc/ssh/sshd_config
+cat /etc/ssh/sshd_config | grep evel
+
+
+
+#原有的全注释
+sed -i '/^ClientAliveInterval /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^ClientAliveCountMax /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^MaxAuthTries /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^IgnoreRhosts /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^HostbasedAuthentication /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^PermitEmptyPasswords /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^PermitRootLogin /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^X11Forwarding /s/^/#/' /etc/ssh/sshd_config
+
+#全部一次性追加
+cat >> /etc/ssh/sshd_config << EOF
+ClientAliveInterval 600
+ClientAliveCountMax 2
+MaxAuthTries 4
+IgnoreRhosts yes
+HostbasedAuthentication no
+PermitEmptyPasswords no
+PermitRootLogin no
+X11Forwarding no 
+EOF
+tail -n 10 /etc/ssh/sshd_config
+systemctl restart sshd
+systemctl status  sshd
+ 
+#========检查telnet===
+chkconfig --list |grep "telnet|ssh"
+
+#=========rsylog
+systemctl enable rsyslog
+cat /etc/rsyslog.conf | grep -e "secure\|cron"  | grep -v '#'
+
+#======lograte
+cat /etc/logrotate.conf
+#sed -i 's/rotate [0-9]*/rotate 26/' /etc/logrotate.conf
+sed -i 's/rotate [0-9]/# rotate 1/' /etc/logrotate.conf
+sed -i '2s/rotate 6/rotate 26/' /etc/logrotate.conf
+sed -i '1 a\rotate 26' /etc/logrotate.conf
+cat /etc/logrotate.conf
+systemctl restart rsyslog.service
+
+
+#==========内核参数
+if ! grep -q "kernel.randomize_va_space" /etc/sysctl.conf; then
+    echo "kernel.randomize_va_space = 2" | sudo tee -a /etc/sysctl.conf
+fi
+sysctl -w kernel.randomize_va_space=2
+
+
+#sudo sed -i -E 's/^\s*([^#][^[:space:]]*)/\#\1/' /etc/ssh/sshd_config
+
+
+
+=============
+函数未添加
+locate .rhost 
+locate .netrc 
+locate hosts.equiv
+
+
+130.38.27.199
+130.38.27.202
+130.38.27.203
+130.38.27.207
+130.38.27.208
+130.38.27.209
+130.38.27.210
+130.38.27.211
+130.38.27.216
+130.38.27.222
+
+
+#=============================================================================================================================================================================================
+#!/bin/bash
+
+#centos7
+cat /etc/redhat-release
+
+
+/bin/cat /etc/shadow | /bin/awk -F: '($2 == "" ) { print "user " $1 " does not have a password "}'
+
+awk -F: '($3 == 0) {print}' /etc/passwd
+
+# check pwquality.conf  file
+cat /etc/security/pwquality.conf  | grep -v '#'
+cp /etc/security/pwquality.conf{,.bak}
+cat >> /etc/security/pwquality.conf << EOF
+remember = 5
+deny = 5
+difok = 5
+minlen = 9
+lcredit = -1 
+ucredit = -1 
+dcredit = -1 
+ocredit = -1  
+unlock_time = 900
+EOF
+cat  /etc/security/pwquality.conf
+
+
+getent group wheel
+usermod -G wheel app_999
+getent group wheel
+
+
+cp /etc/pam.d/su{,.bak}
+cat /etc/pam.d/su
+if grep -q "group=wheel" /etc/pam.d/su; then
+    echo 'youle '
+else
+    sed -i 's/#auth\s\+required\s\+pam_wheel\.so\s\+use_uid/auth\t\trequired\tpam_wheel.so group=wheel/'  /etc/pam.d/su
+    echo 'yi tianjia'
+fi
+echo '======================='
+cat /etc/pam.d/su
+
+
+systemctl status vsftpd
+
+#xzqxian
+chmod 644 /etc/passwd
+chmod 400 /etc/shadow
+chmod 644 /etc/group
+chmod 600 /var/log/messages
+chmod 644 /var/log/dmesg
+chmod 600 /var/log/maillog
+chmod 600 /var/log/secure 
+chmod 664 /var/log/wtmp
+chmod 600 /var/log/cron
+
+#===============SSH
+cp /etc/ssh/sshd_config{,.bak}
+sed  -i  '/^#LogLevel INFO/s/^#//' /etc/ssh/sshd_config
+cat /etc/ssh/sshd_config | grep evel
+
+
+
+
+sed -i '/^ClientAliveInterval /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^ClientAliveCountMax /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^MaxAuthTries /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^IgnoreRhosts /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^HostbasedAuthentication /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^PermitEmptyPasswords /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^PermitRootLogin /s/^/#/' /etc/ssh/sshd_config
+sed -i '/^X11Forwarding /s/^/#/' /etc/ssh/sshd_config
+
+
+cat >> /etc/ssh/sshd_config << EOF
+ClientAliveInterval 600
+ClientAliveCountMax 2
+MaxAuthTries 4
+IgnoreRhosts yes
+HostbasedAuthentication no
+PermitEmptyPasswords no
+PermitRootLogin no
+X11Forwarding no 
+EOF
+cat /etc/ssh/sshd_config
+systemctl restart sshd
+systemctl status  sshd
+ 
+
+#========check telnet===
+chkconfig --list |grep "telnet|ssh"
+
+#=========rsylog
+systemctl enable rsyslog
+cat /etc/rsyslog.conf | grep -e "secure\|cron"  | grep -v '#'
+
+
+#======lograte
+cat /etc/logrotate.conf
+#sed -i 's/rotate [0-9]*/rotate 26/' /etc/logrotate.conf
+sed -i 's/rotate [0-9]/# rotate 1/' /etc/logrotate.conf
+sed -i '2s/rotate 6/rotate 26/' /etc/logrotate.conf
+sed -i '1 a\rotate 26' /etc/logrotate.conf
+cat /etc/logrotate.conf
+systemctl restart rsyslog.service
+
+
+#==========kernel cs
+if ! grep -q "kernel.randomize_va_space" /etc/sysctl.conf; then
+    echo "kernel.randomize_va_space = 2" | sudo tee -a /etc/sysctl.conf
+fi
+sysctl -w kernel.randomize_va_space=2 >/dev/null
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
