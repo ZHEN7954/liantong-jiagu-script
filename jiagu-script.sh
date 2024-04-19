@@ -215,7 +215,7 @@ add_kernel_parameter(){
   if ! grep -q "kernel.randomize_va_space" /etc/sysctl.conf; then
       echo "kernel.randomize_va_space = 2" | sudo tee -a /etc/sysctl.conf
   fi
-  sysctl -w kernel.randomize_va_space=2
+  sysctl -w kernel.randomize_va_space=2 >/dev/null
 }
 
 #############应用函数###################
