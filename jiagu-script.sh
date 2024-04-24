@@ -59,14 +59,30 @@ centos6_add_password_policy(){
   echo ">>>>>>>>>>>>>>>>>>>>>>centos6添加密码策略<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cp /etc/pam.d/password-auth{,.bak}
   cp /etc/pam.d/system-auth{,.bak}
-  sed -i 's/password    requisite     pam_cracklib.so try_first_pass retry=3/password    requisite     pam_cracklib.so minlen=8 dcredit=-1 ucredit=-1 ocredit=-1 lcredit=-1 minclass=4 retry=3/g' /etc/pam.d/system-auth
-  #不重复使用最近使用过的密码
 
-auth        required      pam_unix.so try_first_pass likeauth nullok remember=5 lockout_time=900
-
+  check_password_policy() {
+    if grep -qE "minlen|dcredit|ucredit|ocredit|lcredit|minclass|retry" /etc/pam.d/system-auth; then
+        echo "密码策略配置已存在."
+    else
+        echo "密码策略配置不存在."
+        sed -i 's/password    requisite     pam_cracklib.so try_first_pass retry=3/password    requisite     pam_cracklib.so minlen=8 dcredit=-1 ucredit=-1 ocredit=-1 lcredit=-1  retry=3/g' /etc/pam.d/system-auth
+        sed -i '4i\auth\trequired\tpam_tally2.so deny=5 unlock_time=900' /etc/pam.d/system-auth
+        sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/password-auth
+        sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/system-auth
+        sed -i 's/unlock_time=[0-9]*/unlock_time=900/g' /etc/pam.d/system-auth
+        cat /etc/pam.d/system-auth
+        cat  /etc/pam.d/password-auth
+    fi
+}
   
-  sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/password-auth
-  sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/system-auth
+  #密码策略大小写
+#  sed -i 's/password    requisite     pam_cracklib.so try_first_pass retry=3/password    requisite     pam_cracklib.so minlen=8 dcredit=-1 ucredit=-1 ocredit=-1 lcredit=-1 minclass=4 retry=3/g' /etc/pam.d/system-auth
+#  sed -i '4i\auth\trequired\tpam_tally2.so deny=5 unlock_time=900' /etc/pam.d/system-auth
+  #不重复使用最近使用过的密码
+  #auth        required      pam_unix.so try_first_pass likeauth nullok remember=5 lockout_time=900
+  #sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/password-auth
+  #sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/system-auth
+  #sed -i 's/unlock_time=180/unlock_time=900/' /etc/pam.d/system-auth
 }
 
 
@@ -89,6 +105,14 @@ EOF
   echo " "
 }
 
+#set_passwd_90(){{
+#修改了 /etc/login.defs下参数时，会立即生效，但是它只对修改后创建的用户生效，对修改前创建的用户无效。
+#  sed -i 's/^PASS_MAX_DAYS.*$/PASS_MAX_DAYS   90/' /etc/login.defs
+#  cat /etc/login.defs  | grep -i max_days | grep -v '#'
+#  chage --maxdays 90 aiobs [user]
+#  chage --warndays 7 aiobs
+#}
+
 check_wheel(){
   echo ">>>>>>>>>>>>>>>>>>>>>>>>检查wheel有无app_999<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   getent group wheel | grep 'app_999'  > /dev/null
@@ -106,11 +130,12 @@ check_wheel(){
   echo ">>>>>>>>>>>>>>>>><检查/etc/pam.d/su 已添加wheel<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cp /etc/pam.d/su{,.bak}
   if grep -q "group=wheel" /etc/pam.d/su; then
-      echo 'Already Existing'
+      echo 'group=wheel Already Existing'
       echo " "
   else
-      sed -i 's/#auth\s\+required\s\+pam_wheel\.so\s\+use_uid/auth\t\trequired\tpam_wheel.so group=wheel/'  /etc/pam.d/su
-      echo 'Added to /etc/pam.d/su'
+      #sed -i 's/#auth\s\+required\s\+pam_wheel\.so\s\+use_uid/auth\t\trequired\tpam_wheel.so group=wheel/'  /etc/pam.d/su
+      sed -i 's/pam_wheel.so use_uid/pam_wheel.so group=wheel/' /etc/pam.d/su
+      echo 'group=wheel Added to /etc/pam.d/su'
       
   fi
 
@@ -123,11 +148,8 @@ check_wheel(){
 check_vsftp_service(){
   echo ">>>>>>>>>>>>>>>>>>>>>>>检查vsftp服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   # 检查是否安装了 vsftpd
-  if ! command -v vsftpd &> /dev/null; then
-      echo "vsftpd 未安装"
-      echo " "
-  else
-      echo "vsftpd 已安装，请配置限制条件"
+  if systemctl is-active --quiet vsftpd; then
+      echo "vsftpd 已启动，请配置限制条件"
       if grep -q "^root$" /etc/vsftpd/ftpusers; then
       	echo 'root user disabled'
       else
@@ -141,7 +163,10 @@ check_vsftp_service(){
   		    { grep -q "^anon_umask=022$" /etc/vsftpd/vsftpd.conf || echo "anon_umask=022"; grep -q "^local_umask=022$" /etc/vsftpd/vsftpd.conf || echo "local_umask=022"; } | sudo tee -a /etc/vsftpd/vsftpd.conf >/dev/null
   		    echo "Added missing rows to /etc/vsftpd/vsftpd.conf"
   		    grep -E '^(anon|local)_umask=022$' /etc/vsftpd/vsftpd.conf | grep -v '#'
+          sed -i 's/^anonymous_enable=.*/anonymous_enable=NO/' /etc/vsftpd/vsftpd.conf
   				# 重启 vsftpd 服务
+          #service  vsftpd restart
+          #/etc/init.d/vsftpd restart
   				systemctl restart vsftpd
   				if [ $? -eq 0 ]; then
   					    echo "vsftpd Service restart successful"
@@ -150,6 +175,9 @@ check_vsftp_service(){
   					    echo "vsftpd Service restart failed"
   				fi
   		fi
+  else
+      echo "vsftpd 未启动"
+      echo " "
   fi
 }
 
@@ -196,7 +224,6 @@ ssh_config_reinforce(){
   sed -i '/^PermitEmptyPasswords /s/^/#/' /etc/ssh/sshd_config
   sed -i '/^PermitRootLogin /s/^/#/' /etc/ssh/sshd_config
   sed -i '/^X11Forwarding /s/^/#/' /etc/ssh/sshd_config
-  #全部一次性追加
   cat >> /etc/ssh/sshd_config << EOF
 ClientAliveInterval 600
 ClientAliveCountMax 2
@@ -208,6 +235,7 @@ PermitRootLogin no
 X11Forwarding no 
 EOF
   tail -n 10 /etc/ssh/sshd_config
+#  service sshd restart
   systemctl restart sshd
   systemctl status  sshd
   echo " "
@@ -216,13 +244,13 @@ EOF
 
 check_telnet_service(){
   echo ">>>>>>>>>>>>>>>>>>>>>>>检查是否开启了Telnet-Server服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
-  if ss -tnlp  | grep 23; then
+  if ss -tnlp  | grep ':23$'; then
     echo ">>>Telnet-Server服务已开启--------[需调整]"
     sed -i 's/disable = no/disable = yes/' /etc/xinetd.d/telnet
     systemctl stop telnet
     systemctl disable telnet
-    service telnet stop
-    chkconfig telnet off
+#    service telnet stop
+#    chkconfig telnet off
   else
     echo "Telnet-Server服务未开启--------[无需调整]"
     echo " "
@@ -232,21 +260,25 @@ check_telnet_service(){
 config_log(){
   echo ">>>>>>>>>>>>>>>>>>>>>>>配置日志服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   #=========rsylog
-  systemctl enable rsyslog
+  chkconfig rsyslog on
+  systemctl enable rsyslog.service
   echo "------------检查rsyslog日志配置-------------------"
   cat /etc/rsyslog.conf | grep -e "secure\|cron"  | grep -v '#'
   
   
   #======lograte
   echo ">>>>>>>>>>>>>>>>>>>>>>>配置lograte日志切割<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
-  cp /etc/logrotate.conf{,.bak}
+  cp /etc/logrotate.conf{,.bak1}
   cat /etc/logrotate.conf
- echo " "
+  echo " "
   sed -i 's/rotate [0-9]/# rotate 1/' /etc/logrotate.conf
   sed -i '1 a\rotate 26' /etc/logrotate.conf
+  echo ">>>>>>>>>>>>>修改后logrotate.conf"
   cat /etc/logrotate.conf
+#  service rsyslog restart
   systemctl restart rsyslog.service
 }
+
 
 add_kernel_parameter(){
   echo ">>>>>>>>>>>>>>>>>>>>>>>内核参数配置<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
@@ -256,10 +288,19 @@ add_kernel_parameter(){
   sysctl -w kernel.randomize_va_space=2 >/dev/null
 }
 
+check_rhosts_netrc(){
+  echo ">>>>>>>>>>>>>>检查rhosts，.netrc，hosts.equiv 如有需要删除<<<<<<<<<<<<<<<<<<<<<<<<<"
+  locate .rhost 
+  locate .netrc 
+  locate hosts.equiv
+  echo " "
+}
+
 #############应用函数###################
 # centos7 可用
 check_null_passwd_uid_0
 centos7_add_password_policy
+#set_passwd_90
 check_wheel
 check_vsftp_service
 add_sysfile_authority
@@ -267,19 +308,4 @@ ssh_config_reinforce
 check_telnet_service
 config_log
 add_kernel_parameter
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+check_rhosts_netrc
