@@ -3,8 +3,8 @@
 echo " "
 echo "##########################################################################"
 echo "#                                                                        #"
-echo "#                               主机安全检测                             #"
-echo "#                                                                        #"
+echo "#                             主机安全检测配置                            #"
+echo "#                        author  zjz   20240424 v2.1                     #"
 echo "##########################################################################"
 echo " "
 echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统基本信息<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
@@ -140,7 +140,6 @@ check_wheel(){
       #sed -i 's/#auth\s\+required\s\+pam_wheel\.so\s\+use_uid/auth\t\trequired\tpam_wheel.so group=wheel/'  /etc/pam.d/su
       sed -i 's/pam_wheel.so use_uid/pam_wheel.so group=wheel/' /etc/pam.d/su
       echo 'group=wheel Added to /etc/pam.d/su'
-      
   fi
 
   cat /etc/pam.d/su
@@ -152,36 +151,39 @@ check_wheel(){
 check_vsftp_service(){
   echo ">>>>>>>>>>>>>>>>>>>>>>>检查vsftp服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   # 检查是否安装了 vsftpd
-  if systemctl is-active --quiet vsftpd; then
+  if ss -tnlp | grep vsftpd; then
       echo "vsftpd 已启动，请配置限制条件"
       if grep -q "^root$" /etc/vsftpd/ftpusers; then
-      	echo 'root user disabled'
+      	echo 'root user disabled ftp connect'
       else
       	echo "root" >> /etc/vsftpd/ftpusers 
       	echo 'root  add to ftpusers'
       fi
       if grep -q "^anon_umask=022$" /etc/vsftpd/vsftpd.conf && grep -q "^local_umask=022$" /etc/vsftpd/vsftpd.conf; then
-      echo "Already exists anon_umask=022 和 local_umask=022 2row"
-      grep -E '^(anon|local)_umask=022$' /etc/vsftpd/vsftpd.conf | grep -v '#'
+        echo "Already exists anon_umask=022 和 local_umask=022 2row"
+        grep -E '^(anon|local)_umask=022$' /etc/vsftpd/vsftpd.conf | grep -v '#'
   		else
   		    { grep -q "^anon_umask=022$" /etc/vsftpd/vsftpd.conf || echo "anon_umask=022"; grep -q "^local_umask=022$" /etc/vsftpd/vsftpd.conf || echo "local_umask=022"; } | sudo tee -a /etc/vsftpd/vsftpd.conf >/dev/null
   		    echo "Added missing rows to /etc/vsftpd/vsftpd.conf"
   		    grep -E '^(anon|local)_umask=022$' /etc/vsftpd/vsftpd.conf | grep -v '#'
           sed -i 's/^anonymous_enable=.*/anonymous_enable=NO/' /etc/vsftpd/vsftpd.conf
-  				# 重启 vsftpd 服务
-          #service  vsftpd restart
-          #/etc/init.d/vsftpd restart
-  				systemctl restart vsftpd
-  				if [ $? -eq 0 ]; then
-  					    echo "vsftpd Service restart successful"
-                echo " "
-  					else
-  					    echo "vsftpd Service restart failed"
-  				fi
+          if [ "$version" -eq 7 ]; then
+              # 如果 version 等于 7，则执行以下操作
+              echo "The version is 7."
+              systemctl restart vsftpd
+              echo "--------检查服务是否正常--------"
+              systemctl status vsftpd
+          else
+              # 如果 version 不等于 7，则执行以下操作
+              echo "The version is 6."
+              service  vsftpd restart
+              echo "--------检查服务是否正常--------"
+              service  vsftpd status
+          fi
   		fi
-  else
-      echo "vsftpd 未启动"
-      echo " "
+  else 
+    echo "vsftpd 未启动"
+    echo " "
   fi
 }
 
@@ -241,9 +243,20 @@ EOF
   tail -n 10 /etc/ssh/sshd_config
 #  service sshd restart
   echo "-------重启ssh服务-------- "
-  systemctl restart sshd
-  systemctl status  sshd
-  echo " "
+    if [ "$version" -eq 7 ]; then
+        # 如果 version 等于 7，则执行以下操作
+        echo "The version is 7."
+        systemctl restart sshd
+        echo "--------检查服务是否正常--------"
+        systemctl status  sshd
+    else
+        # 如果 version 不等于 7，则执行以下操作
+        echo "The version is 6."
+        service  sshd restart
+        echo "--------检查服务是否正常--------"
+        service  sshd status
+        echo " "
+    fi
 }
 
 
@@ -252,10 +265,19 @@ check_telnet_service(){
   if ss -tnlp  | grep ':23$'; then
     echo ">>>Telnet-Server服务已开启--------[需调整]"
     sed -i 's/disable = no/disable = yes/' /etc/xinetd.d/telnet
-    systemctl stop telnet
-    systemctl disable telnet
-#    service telnet stop
-#    chkconfig telnet off
+ if [ "$version" -eq 7 ]; then
+        # 如果 version 等于 7，则执行以下操作
+        echo "The version is 7."
+        systemctl stop telnet
+        systemctl disable telnet
+        echo " "
+    else
+        # 如果 version 不等于 7，则执行以下操作
+        echo "The version is 6."
+        service telnet stop
+        chkconfig telnet off
+        echo " "
+    fi
   else
     echo "Telnet-Server服务未开启--------[无需调整]"
     echo " "
@@ -265,8 +287,19 @@ check_telnet_service(){
 config_log(){
   echo ">>>>>>>>>>>>>>>>>>>>>>>配置日志服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   #=========rsylog
-  chkconfig rsyslog on
-  systemctl enable rsyslog.service
+ if [ "$version" -eq 7 ]; then
+      # 如果 version 等于 7，则执行以下操作
+      echo "The version is 7."
+      systemctl enable rsyslog.service
+      echo " "
+  else
+      # 如果 version 不等于 7，则执行以下操作
+      echo "The version is 6."
+      chkconfig rsyslog on
+      echo " "
+  fi
+ 
+ 
   echo "------------检查rsyslog日志配置-------------------"
   cat /etc/rsyslog.conf | grep -e "secure\|cron"  | grep -v '#'
   
@@ -280,8 +313,20 @@ config_log(){
   sed -i '1 a\rotate 26' /etc/logrotate.conf
   echo ">>>>>>>>>>>>>修改后logrotate.conf<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cat /etc/logrotate.conf
-#  service rsyslog restart
-  systemctl restart rsyslog.service
+   if [ "$version" -eq 7 ]; then
+      # 如果 version 等于 7，则执行以下操作
+      echo "The version is 7."
+      systemctl restart rsyslog.service
+      echo "--------检查服务是否正常--------"
+      systemctl status rsyslog.service
+      echo " "
+  else
+      # 如果 version 不等于 7，则执行以下操作
+      echo "The version is 6."
+      service rsyslog restart
+      echo "--------检查服务是否正常--------"
+      service rsyslog status
+  fi
 }
 
 
@@ -310,8 +355,7 @@ if [ "$version" -eq 7 ]; then
     centos7_add_password_policy
 else
     # 如果 version 不等于 7，则执行以下操作
-    echo "The version is not 7."
-    
+    echo "The version is not 7."  
 fi
 #set_passwd_90
 check_wheel
