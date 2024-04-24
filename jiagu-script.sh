@@ -56,11 +56,10 @@ check_null_passwd_uid_0(){
 }
 
 centos6_add_password_policy(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>centos6添加密码策略<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
-  cp /etc/pam.d/password-auth{,.bak}
-  cp /etc/pam.d/system-auth{,.bak}
-
-  check_password_policy() {
+    echo ">>>>>>>>>>>>>>>>>>>>>>centos6添加密码策略<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+    cp /etc/pam.d/password-auth{,.bak}
+    cp /etc/pam.d/system-auth{,.bak}
+    cp /etc/pam.d/sshd{,.bak}
     if grep -qE "minlen|dcredit|ucredit|ocredit|lcredit|minclass|retry" /etc/pam.d/system-auth; then
         echo "密码策略配置已存在."
     else
@@ -70,8 +69,13 @@ centos6_add_password_policy(){
         sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/password-auth
         sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/system-auth
         sed -i 's/unlock_time=[0-9]*/unlock_time=900/g' /etc/pam.d/system-auth
+        sed -i '3i\auth\trequired\tpam_tally2.so deny=5 unlock_time=900' /etc/pam.d/sshd
+        #sed -i 's/unlock_time=[0-9]*/auth required pam_tally2.so deny=5 unlock_time=900/g' /etc/pam.d/system-auth
+
+        #
         cat /etc/pam.d/system-auth
         cat  /etc/pam.d/password-auth
+        cat /etc/pam.d/sshd
     fi
 }
   
@@ -83,7 +87,7 @@ centos6_add_password_policy(){
   #sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/password-auth
   #sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/system-auth
   #sed -i 's/unlock_time=180/unlock_time=900/' /etc/pam.d/system-auth
-}
+
 
 
 centos7_add_password_policy(){
@@ -236,6 +240,7 @@ X11Forwarding no
 EOF
   tail -n 10 /etc/ssh/sshd_config
 #  service sshd restart
+  echo "-------重启ssh服务-------- "
   systemctl restart sshd
   systemctl status  sshd
   echo " "
@@ -273,7 +278,7 @@ config_log(){
   echo " "
   sed -i 's/rotate [0-9]/# rotate 1/' /etc/logrotate.conf
   sed -i '1 a\rotate 26' /etc/logrotate.conf
-  echo ">>>>>>>>>>>>>修改后logrotate.conf"
+  echo ">>>>>>>>>>>>>修改后logrotate.conf<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cat /etc/logrotate.conf
 #  service rsyslog restart
   systemctl restart rsyslog.service
@@ -299,7 +304,15 @@ check_rhosts_netrc(){
 #############应用函数###################
 # centos7 可用
 check_null_passwd_uid_0
-centos7_add_password_policy
+if [ "$version" -eq 7 ]; then
+    # 如果 version 等于 7，则执行以下操作
+    echo "The version is 7."
+    centos7_add_password_policy
+else
+    # 如果 version 不等于 7，则执行以下操作
+    echo "The version is not 7."
+    
+fi
 #set_passwd_90
 check_wheel
 check_vsftp_service
