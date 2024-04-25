@@ -368,3 +368,4 @@ check_telnet_service
 config_log
 add_kernel_parameter
 check_rhosts_netrc
+ps -ef |grep oracle
