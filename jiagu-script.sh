@@ -60,7 +60,7 @@ centos6_add_password_policy(){
     cp /etc/pam.d/password-auth{,.bak}
     cp /etc/pam.d/system-auth{,.bak}
     cp /etc/pam.d/sshd{,.bak}
-    if grep -qE "minlen|dcredit|ucredit|ocredit|lcredit|minclass|retry" /etc/pam.d/system-auth; then
+    if grep -qE "minlen|dcredit|ucredit|ocredit|lcredit" /etc/pam.d/system-auth; then
         echo "密码策略配置已存在."
     else
         echo "密码策略配置不存在."
@@ -91,7 +91,7 @@ centos6_add_password_policy(){
 
 
 centos7_add_password_policy(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>centos7添加密码策略<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>centos7添加密码策略<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cp /etc/security/pwquality.conf{,.bak}
   sed -i 's/^\([^#]\)/# \1/g' /etc/security/pwquality.conf
   cat >> /etc/security/pwquality.conf << EOF
@@ -118,20 +118,21 @@ EOF
 #}
 
 check_wheel(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>>>检查wheel有无app_999<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>>>检查wheel有无app_999<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   getent group wheel | grep 'app_999'  > /dev/null
   if [ $? -eq 0 ];then
     echo "app_999 already to wheel group"
     getent group wheel | grep 'app_999'
     echo " "
   else
+    useradd app_999
     usermod -G wheel app_999
     echo "app_999 add to wheel group"
     getent group wheel | grep 'app_999'
     echo " "
   fi
   
-  echo ">>>>>>>>>>>>>>>>><检查/etc/pam.d/su 已添加wheel<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>><检查/etc/pam.d/su 已添加wheel<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cp /etc/pam.d/su{,.bak}
   if grep -q "group=wheel" /etc/pam.d/su; then
       echo 'group=wheel Already Existing'
@@ -149,7 +150,7 @@ check_wheel(){
 
 
 check_vsftp_service(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>>检查vsftp服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>>检查vsftp服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   # 检查是否安装了 vsftpd
   if ss -tnlp | grep vsftpd; then
       echo "vsftpd 已启动，请配置限制条件"
@@ -189,7 +190,7 @@ check_vsftp_service(){
 
 
 add_sysfile_authority(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>>>>检查系统文件权限<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>>>>检查系统文件权限<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   chmod 644 /etc/passwd
   chmod 400 /etc/shadow
   chmod 644 /etc/group
@@ -213,7 +214,7 @@ add_sysfile_authority(){
 }
 
 ssh_config_reinforce(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>>ssh 加固<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>>ssh 加固<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cp /etc/ssh/sshd_config{,.bak}
   # 取消 LogLevel INFO 参数的注释
   sed  -i '/^#LogLevel INFO/s/^#//' /etc/ssh/sshd_config
@@ -261,7 +262,7 @@ EOF
 
 
 check_telnet_service(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>>检查是否开启了Telnet-Server服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>>检查是否开启了Telnet-Server服务<<<<<<<<<<<<<<<<<<<<<<<<"
   if ss -tnlp  | grep ':23$'; then
     echo ">>>Telnet-Server服务已开启--------[需调整]"
     sed -i 's/disable = no/disable = yes/' /etc/xinetd.d/telnet
@@ -285,7 +286,7 @@ check_telnet_service(){
 }
 
 config_log(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>>配置日志服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>>配置日志服务<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   #=========rsylog
  if [ "$version" -eq 7 ]; then
       # 如果 version 等于 7，则执行以下操作
@@ -305,13 +306,13 @@ config_log(){
   
   
   #======lograte
-  echo ">>>>>>>>>>>>>>>>>>>>>>>配置lograte日志切割<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>>配置lograte日志切割<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cp /etc/logrotate.conf{,.bak1}
   cat /etc/logrotate.conf
   echo " "
   sed -i 's/rotate [0-9]/# rotate 1/' /etc/logrotate.conf
   sed -i '1 a\rotate 26' /etc/logrotate.conf
-  echo ">>>>>>>>>>>>>修改后logrotate.conf<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>修改后logrotate.conf<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cat /etc/logrotate.conf
    if [ "$version" -eq 7 ]; then
       # 如果 version 等于 7，则执行以下操作
@@ -331,7 +332,7 @@ config_log(){
 
 
 add_kernel_parameter(){
-  echo ">>>>>>>>>>>>>>>>>>>>>>>内核参数配置<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>>>>>>>>>>内核参数配置<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   if ! grep -q "kernel.randomize_va_space" /etc/sysctl.conf; then
       echo "kernel.randomize_va_space = 2" | sudo tee -a /etc/sysctl.conf
   fi
@@ -339,7 +340,7 @@ add_kernel_parameter(){
 }
 
 check_rhosts_netrc(){
-  echo ">>>>>>>>>>>>>>检查rhosts，.netrc，hosts.equiv 如有需要删除<<<<<<<<<<<<<<<<<<<<<<<<<"
+  echo ">>>>>>>>>>>>>>检查rhosts，.netrc，hosts.equiv 如有需要删除<<<<<<<<<<<<<<<<<<<<<<<"
   locate .rhost 
   locate .netrc 
   locate hosts.equiv
@@ -356,6 +357,7 @@ if [ "$version" -eq 7 ]; then
 else
     # 如果 version 不等于 7，则执行以下操作
     echo "The version is not 7."  
+    centos6_add_password_policy
 fi
 #set_passwd_90
 check_wheel
