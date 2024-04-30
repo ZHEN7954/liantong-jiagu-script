@@ -3,7 +3,7 @@
 echo " "
 echo "##########################################################################"
 echo "#                                                                        #"
-echo "#                             主机安全检测配置                            #"
+echo "#                             主机安全检测配置                           #"
 echo "#                        author  zjz   20240424 v2.1                     #"
 echo "##########################################################################"
 echo " "
@@ -72,22 +72,14 @@ centos6_add_password_policy(){
         sed -i '3i\auth\trequired\tpam_tally2.so deny=5 unlock_time=900' /etc/pam.d/sshd
         #sed -i 's/unlock_time=[0-9]*/auth required pam_tally2.so deny=5 unlock_time=900/g' /etc/pam.d/system-auth
 
-        #
+        echo "---------cat /etc/pam.d/system-auth-------------"
         cat /etc/pam.d/system-auth
+        echo "---------cat /etc/pam.d/password-auth-----------"
         cat  /etc/pam.d/password-auth
+        echo "-------------cat /etc/pam.d/sshd----------------"
         cat /etc/pam.d/sshd
     fi
 }
-  
-  #密码策略大小写
-#  sed -i 's/password    requisite     pam_cracklib.so try_first_pass retry=3/password    requisite     pam_cracklib.so minlen=8 dcredit=-1 ucredit=-1 ocredit=-1 lcredit=-1 minclass=4 retry=3/g' /etc/pam.d/system-auth
-#  sed -i '4i\auth\trequired\tpam_tally2.so deny=5 unlock_time=900' /etc/pam.d/system-auth
-  #不重复使用最近使用过的密码
-  #auth        required      pam_unix.so try_first_pass likeauth nullok remember=5 lockout_time=900
-  #sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/password-auth
-  #sed -i '/^password.*sufficient.*pam_unix.so/s/$/ remember=5/' /etc/pam.d/system-auth
-  #sed -i 's/unlock_time=180/unlock_time=900/' /etc/pam.d/system-auth
-
 
 
 centos7_add_password_policy(){
@@ -216,7 +208,8 @@ add_sysfile_authority(){
 ssh_config_reinforce(){
   echo ">>>>>>>>>>>>>>>>>>>>>>>ssh 加固<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
   cp /etc/ssh/sshd_config{,.bak}
-  # 取消 LogLevel INFO 参数的注释
+  ## 取消 LogLevel INFO 参数的注释
+  
   sed  -i '/^#LogLevel INFO/s/^#//' /etc/ssh/sshd_config
   cat /etc/ssh/sshd_config | grep evel
   echo "-------Cancel LogLevel INFO--------[已配置]"
@@ -242,7 +235,6 @@ PermitRootLogin no
 X11Forwarding no 
 EOF
   tail -n 10 /etc/ssh/sshd_config
-#  service sshd restart
   echo "-------重启ssh服务-------- "
     if [ "$version" -eq 7 ]; then
         # 如果 version 等于 7，则执行以下操作
@@ -368,4 +360,4 @@ check_telnet_service
 config_log
 add_kernel_parameter
 check_rhosts_netrc
-ps -ef |grep oracle
+ps -ef |grep oracle  | wc 
